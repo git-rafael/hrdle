@@ -1,6 +1,7 @@
 import { locateSessionFile } from '../utils/locate-session-file';
 import { readLastLines } from '../utils/read-last-lines';
 import { KimiSessionStore, kimiWirePath } from './kimi';
+import { piSessionStore } from './pi';
 import type { AgentProvider } from '../../../shared/types';
 
 /**
@@ -33,6 +34,7 @@ import type { AgentProvider } from '../../../shared/types';
 export interface QuestionOption {
   label: string;
   description?: string;
+  freeText?: boolean;
 }
 
 export interface OpenQuestion {
@@ -48,6 +50,10 @@ export interface OpenQuestion {
    * first one is showing.
    */
   ambiguous: boolean;
+  /** Per-row input accepted by the agent's picker. */
+  choiceKeys?: string[];
+  /** Input that completes a multi-select after its rows have been toggled. */
+  choiceSend?: string;
 }
 
 /** How far back either record is read. A question is the last thing that
@@ -223,6 +229,104 @@ export async function openKimiQuestions(sessionId: string, store = new KimiSessi
   return undefined;
 }
 
+interface PiQuestionArguments {
+  question?: unknown;
+  options?: unknown;
+  allowMultiple?: unknown;
+  allowFreeform?: unknown;
+  allowComment?: unknown;
+}
+
+interface PiQuestionPart {
+  type?: unknown;
+  id?: unknown;
+  name?: unknown;
+  arguments?: PiQuestionArguments;
+}
+
+function piOpenQuestion(args: PiQuestionArguments): OpenQuestion | undefined {
+  if (typeof args.question !== 'string' || !args.question.trim()) return undefined;
+  const rawOptions = Array.isArray(args.options) ? args.options : [];
+  const options: QuestionOption[] = [];
+  for (const raw of rawOptions) {
+    const option = typeof raw === 'string'
+      ? { title: raw, description: undefined }
+      : raw as { title?: unknown; description?: unknown } | undefined;
+    if (!option || typeof option.title !== 'string' || !option.title.trim()) continue;
+    options.push({
+      label: option.title.trim(),
+      description: typeof option.description === 'string' && option.description.trim()
+        ? option.description.trim()
+        : undefined,
+    });
+  }
+  const allowFreeform = args.allowFreeform !== false;
+  if (allowFreeform) options.push({ label: 'Type a custom response', freeText: true });
+  if (options.length === 0) return undefined;
+  const multiSelect = args.allowMultiple === true;
+  const choiceKeys = options.map((_, index) => {
+    const digit = String(index + 1);
+    if (index < rawOptions.length) return multiSelect ? digit : `${digit}\r`;
+    // A digit selects a stable real option first, then one down reaches the
+    // synthetic freeform row regardless of where the user left the cursor.
+    const commentDefault = /^(1|true|yes|on)$/i.test(
+      process.env.PI_ASK_USER_ALLOW_COMMENT ?? '',
+    );
+    const commentRows = args.allowComment === true || (
+      args.allowComment === undefined && commentDefault
+    ) ? 1 : 0;
+    return rawOptions.length > 0
+      ? `1${'\x1b[B'.repeat(rawOptions.length + commentRows)}\r`
+      : `${'\x1b[B'.repeat(commentRows)}\r`;
+  });
+  return {
+    question: args.question.trim(),
+    options,
+    multiSelect,
+    ambiguous: false,
+    choiceKeys,
+    ...(multiSelect ? { choiceSend: '\r' } : {}),
+  };
+}
+
+/** Pi's newest unresolved ask_user call, read from the exact JSONL path Herdr reports. */
+export async function openPiQuestion(
+  reference: string,
+  store = piSessionStore,
+): Promise<OpenQuestion | undefined> {
+  return (await openPiQuestions(reference, store))?.[0];
+}
+
+export async function openPiQuestions(
+  reference: string,
+  store = piSessionStore,
+): Promise<OpenQuestion[] | undefined> {
+  const entries = await store.getActiveEntries(reference);
+  if (!entries) return undefined;
+  const resolved = new Set<string>();
+  for (const entry of entries) {
+    if (
+      entry.type === 'message' &&
+      entry.message?.role === 'toolResult' &&
+      entry.message.toolName === 'ask_user' &&
+      typeof entry.message.toolCallId === 'string'
+    ) {
+      resolved.add(entry.message.toolCallId);
+    }
+  }
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const content = entries[i]?.message?.role === 'assistant' ? entries[i].message?.content : [];
+    const parts = Array.isArray(content) ? content as PiQuestionPart[] : [];
+    for (const part of parts) {
+      if (part.type !== 'toolCall' || part.name !== 'ask_user' || typeof part.id !== 'string') continue;
+      if (resolved.has(part.id)) continue;
+      const question = piOpenQuestion(part.arguments ?? {});
+      if (question) return [question];
+    }
+  }
+  return undefined;
+}
+
 /**
  * What an agent's own record says about a question, including whether it is in
  * a position to say anything at all.
@@ -260,5 +364,6 @@ export async function readAgentQuestions(
   if (!sessionId) return { known: false };
   if (agent === 'claude') return { known: true, questions: await openClaudeQuestions(sessionId) };
   if (agent === 'kimi') return { known: true, questions: await openKimiQuestions(sessionId) };
+  if (agent === 'pi') return { known: true, questions: await openPiQuestions(sessionId) };
   return { known: false };
 }

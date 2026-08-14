@@ -15,6 +15,7 @@ describe('Agent provider registry', () => {
   test('derives provider IDs from the registry', () => {
     expect(AGENT_PROVIDER_IDS).toContain('claude');
     expect(AGENT_PROVIDER_IDS).toContain('codex');
+    expect(AGENT_PROVIDER_IDS).toContain('pi');
     expect([...AGENT_PROVIDER_IDS].join(',')).toBe(Object.keys(AGENT_PROVIDERS).join(','));
   });
 
@@ -42,6 +43,12 @@ describe('Agent provider registry', () => {
     expect(parsed.agent).toBe('kimi');
   });
 
+  test('accepts Pi as a create-session agent', () => {
+    const parsed = CreateSessionSchema.parse({ name: 'example', agent: 'pi' });
+
+    expect(parsed.agent).toBe('pi');
+  });
+
   test('rejects unsupported create-session agents', () => {
     const parsed = CreateSessionSchema.safeParse({ name: 'example', agent: 'gemini' });
 
@@ -58,6 +65,8 @@ describe('Agent provider registry', () => {
     expect(detectAgentProviderFromArgs('/home/user/.grok/bin/grok -p prompt')).toBe('grok');
     expect(detectAgentProviderFromArgs('kimi')).toBe('kimi');
     expect(detectAgentProviderFromArgs('/home/user/.kimi-code/bin/kimi --session session_abc')).toBe('kimi');
+    expect(detectAgentProviderFromArgs('pi')).toBe('pi');
+    expect(detectAgentProviderFromArgs('/nix/store/hash-pi/bin/pi --session abc')).toBe('pi');
   });
 
   test('does not detect provider names inside unrelated paths', () => {
@@ -70,6 +79,7 @@ describe('Agent provider registry', () => {
     expect(threadAgentOf('codex')).toBe('codex');
     expect(threadAgentOf('grok')).toBe('grok');
     expect(threadAgentOf('kimi')).toBe('kimi');
+    expect(threadAgentOf('pi')).toBe('pi');
     expect(threadAgentOf('claude')).toBeUndefined();
     expect(threadAgentOf('bash')).toBeUndefined();
     expect(threadAgentOf(undefined)).toBeUndefined();
@@ -123,5 +133,9 @@ describe('Agent provider registry', () => {
     expect(agentResumeCommand('grok', 'session-abc')).toBe("grok --resume 'session-abc'");
     expect(agentResumeCommand('kimi')).toBe('kimi --session');
     expect(agentResumeCommand('kimi', 'session-abc')).toBe("kimi --session 'session-abc'");
+    expect(agentResumeCommand('pi')).toBe('pi --resume');
+    expect(agentResumeCommand('pi', '019ffb3b-0c1b-71b9-b575-45677d8737ed')).toBe(
+      "pi --session '019ffb3b-0c1b-71b9-b575-45677d8737ed'",
+    );
   });
 });

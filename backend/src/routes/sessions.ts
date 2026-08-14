@@ -19,6 +19,8 @@ import { KimiService } from '../services/kimi';
 import { KimiHistoryService } from '../services/kimi-history';
 import { OpenCodeService } from '../services/opencode';
 import { OpenCodeHistoryService } from '../services/opencode-history';
+import { PiService } from '../services/pi';
+import { PiHistoryService } from '../services/pi-history';
 import type { AgentHistoryProvider, AgentThread, AgentThreadService } from '../services/agent-providers';
 import { PromptHistoryService } from '../services/prompt-history';
 import { getAllSessionMetadata, setSessionTheme, setSessionSttPrompt, setSessionSttGlossary, addSessionSttTerms, getLastKnownSessions, saveLastKnownSessions, removeLastKnownSession, type LastKnownSession } from '../services/session-metadata';
@@ -49,12 +51,14 @@ const threadServices: Partial<Record<AgentProvider, AgentThreadService>> = {
   grok: new GrokService(),
   kimi: new KimiService(),
   opencode: new OpenCodeService(),
+  pi: new PiService(),
 };
 export const agentHistoryProviders: Partial<Record<AgentProvider, AgentHistoryProvider>> = {
   codex: new CodexHistoryService(undefined, codexConversationService),
   grok: new GrokHistoryService(),
   kimi: new KimiHistoryService(),
   opencode: new OpenCodeHistoryService(),
+  pi: new PiHistoryService(),
 };
 const promptHistoryService = new PromptHistoryService();
 
@@ -242,14 +246,22 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
   // A missing integration means no id and therefore no active conversation;
   // never guess from cwd, where multiple sessions are ambiguous.
   const threadsByAgent = new Map<AgentProvider, Map<string, AgentThread>>();
-  await Promise.all((Object.entries(threadServices) as [AgentProvider, AgentThreadService][]).map(async ([agentId, service]) => {
-    const sessionIds = herdrSessions
-      .filter((s): s is typeof s & { agentSessionId: string } =>
-        (s.agent ?? s.currentCommand) === agentId && !!s.agentSessionId)
-      .map(s => s.agentSessionId);
-    if (sessionIds.length === 0) return;
-    threadsByAgent.set(agentId, await service.getThreadsByIds(sessionIds));
-  }));
+  const threadLookups: Promise<void>[] = [];
+  for (const [agentId, service] of Object.entries(threadServices) as [AgentProvider, AgentThreadService][]) {
+    const sessionIds = herdrSessions.flatMap((session) => {
+      const workspace = (session.agent ?? session.currentCommand) === agentId && session.agentSessionId
+        ? [session.agentSessionId]
+        : [];
+      const panes = (session.panes ?? []).flatMap((pane) =>
+        pane.agent === agentId && pane.agentSessionId ? [pane.agentSessionId] : []);
+      return [...workspace, ...panes];
+    });
+    if (sessionIds.length === 0) continue;
+    threadLookups.push(service.getThreadsByIds(sessionIds).then((threads) => {
+      threadsByAgent.set(agentId, threads);
+    }));
+  }
+  await Promise.all(threadLookups);
 
   // Remote Control deep-link map: Claude Code sessionId -> bridgeSessionId.
   // Read once per build (cheap: a handful of small ~/.claude/sessions/*.json).
@@ -381,7 +393,7 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
         includeClaudeInfo && s.agentSessionId
           ? bridgeSessionIds.get(s.agentSessionId)
           : undefined,
-      agentSessionId: includeThreadInfo ? s.agentSessionId : undefined,
+      agentSessionId: includeThreadInfo ? (agentThread?.sessionId ?? s.agentSessionId) : undefined,
       messageCount: includeClaudeInfo ? ccSession?.messageCount : undefined,
       gitBranch: includeClaudeInfo ? ccSession?.gitBranch : agentThread?.gitBranch,
       durationMinutes: includeClaudeInfo ? durationMinutes : agentThread?.updatedAt ? Math.round((Date.now() - new Date(agentThread.updatedAt).getTime()) / 60000) : undefined,
@@ -414,12 +426,15 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
           isMultiWorkspace && p.agent === 'claude' && p.agentSessionId && p.path
             ? await claudeCodeService.getSessionById(p.agentSessionId, p.path)
             : null;
+        const paneThread = p.agent && p.agentSessionId
+          ? threadsByAgent.get(p.agent)?.get(p.agentSessionId)
+          : undefined;
         const pane: PaneInfo = {
           paneId: p.paneId,
           currentCommand: p.command,
           currentPath: p.path,
           agent: p.agent,
-          agentSessionId: p.agentSessionId,
+          agentSessionId: paneThread?.sessionId ?? p.agentSessionId,
           isActive: p.isActive,
           tabId: p.tabId,
           label: p.label,

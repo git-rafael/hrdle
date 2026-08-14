@@ -7,10 +7,13 @@ import {
   openClaudeQuestions,
   openKimiQuestion,
   openKimiQuestions,
+  openPiQuestion,
+  openPiQuestions,
   readAgentQuestion,
   readAgentQuestions,
 } from '../agent-question';
 import { KimiSessionStore } from '../kimi';
+import { PiSessionStore } from '../pi';
 
 /**
  * A question read from the agent's own record instead of off the screen.
@@ -175,6 +178,151 @@ describe('kimi', () => {
     ]);
     const all = await openKimiQuestions('session_1', store);
     expect(all?.map((q) => q.question)).toEqual(['intro.lead(冒頭リード文)をどの案に差し替えますか?', '2つめ']);
+  });
+});
+
+/** A Pi session record with an ask_user tool call. */
+function piSession(entries: unknown[]): { path: string; store: PiSessionStore } {
+  const root = mkdtempSync(join(tmpdir(), 'pi-sessions-'));
+  dirs.push(root);
+  const path = join(root, `${SESSION}.jsonl`);
+  writeFileSync(path, entries.map((entry) => JSON.stringify(entry)).join('\n'));
+  return { path, store: new PiSessionStore([root]) };
+}
+
+const piSessionEntry = {
+  type: 'session',
+  version: 3,
+  id: SESSION,
+  timestamp: '2026-08-13T13:06:18.779Z',
+  cwd: '/home/dev/thing',
+};
+
+const piAskEntry = (id: string, overrides: Record<string, unknown> = {}) => ({
+  type: 'message',
+  id: 'assistant-question',
+  timestamp: '2026-08-13T13:10:00.000Z',
+  message: {
+    role: 'assistant',
+    content: [{
+      type: 'toolCall',
+      id,
+      name: 'ask_user',
+      arguments: {
+        question: 'Which delivery should we use?',
+        options: [
+          { title: 'Patch', description: 'Keep the change focused' },
+          { title: 'Fork', description: 'Own the whole source tree' },
+        ],
+        allowMultiple: false,
+        allowFreeform: true,
+        ...overrides,
+      },
+    }],
+  },
+});
+
+const piResultEntry = (id: string) => ({
+  type: 'message',
+  id: 'question-result',
+  timestamp: '2026-08-13T13:11:00.000Z',
+  message: {
+    role: 'toolResult',
+    toolCallId: id,
+    toolName: 'ask_user',
+    content: [{ type: 'text', text: 'User answered: Patch' }],
+  },
+});
+
+describe('pi', () => {
+  test('an unanswered ask_user call carries descriptions and a voice row', async () => {
+    const { path, store } = piSession([piSessionEntry, piAskEntry('ask-1')]);
+
+    expect(await openPiQuestion(path, store)).toEqual({
+      question: 'Which delivery should we use?',
+      options: [
+        { label: 'Patch', description: 'Keep the change focused' },
+        { label: 'Fork', description: 'Own the whole source tree' },
+        { label: 'Type a custom response', freeText: true },
+      ],
+      multiSelect: false,
+      ambiguous: false,
+      choiceKeys: ['1\r', '2\r', '1\u001b[B\u001b[B\r'],
+    });
+  });
+
+  test('a resolved ask_user call is no longer open', async () => {
+    const { path, store } = piSession([
+      piSessionEntry,
+      piAskEntry('ask-1'),
+      piResultEntry('ask-1'),
+    ]);
+
+    expect(await openPiQuestion(path, store)).toBeUndefined();
+  });
+
+  test('a comment row is counted before the freeform row', async () => {
+    const { path, store } = piSession([
+      piSessionEntry,
+      piAskEntry('ask-1', { allowComment: true }),
+    ]);
+
+    expect((await openPiQuestion(path, store))?.choiceKeys).toEqual([
+      '1\r',
+      '2\r',
+      '1\u001b[B\u001b[B\u001b[B\r',
+    ]);
+  });
+
+  test('the environment-default comment row is counted before freeform', async () => {
+    const previous = process.env.PI_ASK_USER_ALLOW_COMMENT;
+    process.env.PI_ASK_USER_ALLOW_COMMENT = 'on';
+    try {
+      const { path, store } = piSession([piSessionEntry, piAskEntry('ask-env')]);
+      expect((await openPiQuestion(path, store))?.choiceKeys?.at(-1)).toBe(
+        '1\u001b[B\u001b[B\u001b[B\r',
+      );
+    } finally {
+      if (previous === undefined) delete process.env.PI_ASK_USER_ALLOW_COMMENT;
+      else process.env.PI_ASK_USER_ALLOW_COMMENT = previous;
+    }
+  });
+
+  test('an unresolved ask_user on an abandoned branch is ignored', async () => {
+    const abandoned = {
+      ...piAskEntry('old-ask'),
+      id: 'abandoned',
+      parentId: null,
+    };
+    const active = {
+      type: 'message',
+      id: 'active',
+      parentId: null,
+      timestamp: '2026-08-13T13:12:00.000Z',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'Active branch' }] },
+    };
+    const { path, store } = piSession([piSessionEntry, abandoned, active]);
+
+    expect(await openPiQuestion(path, store)).toBeUndefined();
+  });
+
+  test('a multi-select uses digits to toggle and Enter to submit', async () => {
+    const { path, store } = piSession([
+      piSessionEntry,
+      piAskEntry('ask-1', { allowMultiple: true, allowFreeform: false }),
+    ]);
+
+    expect(await openPiQuestions(path, store)).toEqual([{
+      question: 'Which delivery should we use?',
+      options: [
+        { label: 'Patch', description: 'Keep the change focused' },
+        { label: 'Fork', description: 'Own the whole source tree' },
+      ],
+      multiSelect: true,
+      ambiguous: false,
+      choiceKeys: ['1', '2'],
+      choiceSend: '\r',
+    }]);
   });
 });
 

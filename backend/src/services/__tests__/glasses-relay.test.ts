@@ -1739,6 +1739,29 @@ describe('recorded questions beat the scrape', () => {
     expect((item.choiceDetails as string[])[0]).toBe('台本をレンズに1画面ずつ表示');
   });
 
+  test('a recorded Pi question carries exact picker keys and its voice row', async () => {
+    glassesRelayDeps.readAgentQuestions = async () => ({
+      known: true,
+      questions: [{
+        question: 'Which delivery should we use?',
+        options: [
+          { label: 'Patch', description: 'Keep the change focused' },
+          { label: 'Fork', description: 'Own the whole source tree' },
+          { label: 'Type a custom response', freeText: true },
+        ],
+        multiSelect: false,
+        ambiguous: false,
+        choiceKeys: ['1\r', '2\r', '1\u001b[B\u001b[B\r'],
+      }],
+    });
+    const sock = await blockedClaudePane(QUESTION_PANE, 'pi');
+
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.choices).toEqual(['Patch', 'Fork', 'Type a custom response']);
+    expect(item.choiceFreeText).toEqual([2]);
+    expect(item.choiceKeys).toEqual(['1\r', '2\r', '1\u001b[B\u001b[B\r']);
+  });
+
   test('several questions: the tab the pane paints is the one served', async () => {
     glassesRelayDeps.readAgentQuestions = async () => ({
       known: true,
@@ -1774,6 +1797,15 @@ describe('recorded questions beat the scrape', () => {
     // may exist - but nothing on this pane may become choices.
     for (const m of sock.ofType('glasses-relay')) {
       expect((m.item as Record<string, unknown>).choices).toBeUndefined();
+    }
+  });
+
+  test('Pi asking nothing does not turn numbered output into choices', async () => {
+    glassesRelayDeps.readAgentQuestions = async () => ({ known: true, questions: undefined });
+    const sock = await blockedClaudePane(QUESTION_PANE, 'pi');
+
+    for (const message of sock.ofType('glasses-relay')) {
+      expect((message.item as Record<string, unknown>).choices).toBeUndefined();
     }
   });
 

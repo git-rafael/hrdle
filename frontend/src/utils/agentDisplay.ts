@@ -50,6 +50,12 @@ const AGENT_BADGES: Record<AgentProvider, AgentBadgeStyle> = {
 		barClassName: "bg-orange-400/70",
 		labelClassName: "text-orange-300",
 	},
+	pi: {
+		label: AGENT_PROVIDERS.pi.displayName,
+		badgeClassName: "text-sky-300 bg-sky-400/10 border-sky-400/20",
+		barClassName: "bg-sky-400/70",
+		labelClassName: "text-sky-300",
+	},
 };
 
 /** Badge style for a provider; unknown/undefined falls back to Claude. */

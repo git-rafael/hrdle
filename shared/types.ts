@@ -94,6 +94,16 @@ export const AGENT_PROVIDERS = {
     processPatterns: [/(?:^|\/)opencode(?:\s|$)/],
     supportsConversationMetadata: false,
   },
+  pi: {
+    id: 'pi',
+    command: 'pi',
+    resumeCommand: 'pi --session',
+    resumeWithoutSessionCommand: 'pi --resume',
+    labelKey: 'session.agentProvider.pi',
+    displayName: 'Pi',
+    processPatterns: [/(?:^|\/)pi(?:\s|$)/],
+    supportsConversationMetadata: false,
+  },
 } as const;
 
 export type AgentProvider = keyof typeof AGENT_PROVIDERS;
@@ -137,8 +147,13 @@ export function agentDisplayName(agent: string | undefined): string {
 }
 
 export function agentResumeCommand(agent: AgentProvider, sessionId?: string): string {
-  const base = AGENT_PROVIDERS[agent].resumeCommand;
-  if (!sessionId) return base;
+  const provider = AGENT_PROVIDERS[agent];
+  const base = provider.resumeCommand;
+  if (!sessionId) {
+    return 'resumeWithoutSessionCommand' in provider
+      ? provider.resumeWithoutSessionCommand
+      : base;
+  }
   // The command is typed into an interactive shell over the pane's control stream, so the
   // session id is single-quoted to guarantee it cannot break out of the
   // argument — defense-in-depth on top of SessionIdSchema at the routes.
