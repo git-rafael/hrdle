@@ -1762,6 +1762,68 @@ describe('recorded questions beat the scrape', () => {
     expect(item.choiceKeys).toEqual(['1\r', '2\r', '1\u001b[B\u001b[B\r']);
   });
 
+  test('an open Pi record reaches a fresh glasses subscriber while Herdr still says working', async () => {
+    glassesRelayDeps.readAgentQuestions = async () => ({
+      known: true,
+      questions: [{
+        question: 'Which test should run?',
+        options: [{ label: 'Voice' }, { label: 'History' }],
+        multiSelect: false,
+        ambiguous: false,
+        choiceKeys: ['1\r', '2\r'],
+      }],
+    });
+    glassesRelayDeps.readPaneText = async () => QUESTION_PANE;
+    glassesRelayDeps.listWorkspaces = async () => [
+      ws('s1', [{ paneId: '%0', agent: 'pi', agentSessionId: 'pi-uuid', agentStatus: 'working' }]),
+    ];
+
+    const sock = new FakeSocket();
+    await subscribeGlassesRelay(sock);
+
+    const snapshot = sock.ofType('glasses-relay-snapshot')[0].items as Array<Record<string, unknown>>;
+    expect(snapshot).toHaveLength(1);
+    expect(snapshot[0]?.text).toBe('Which test should run?');
+    expect(snapshot[0]?.choices).toEqual(['Voice', 'History']);
+  });
+
+  test('a Pi question appearing and resolving without a Herdr status change is tracked', async () => {
+    let open = false;
+    glassesRelayDeps.readAgentQuestions = async () => ({
+      known: true,
+      questions: open
+        ? [{
+            question: 'Continue from the glasses?',
+            options: [{ label: 'Yes' }, { label: 'No' }],
+            multiSelect: false,
+            ambiguous: false,
+            choiceKeys: ['1\r', '2\r'],
+          }]
+        : undefined,
+    });
+    glassesRelayDeps.readPaneText = async () => QUESTION_PANE;
+    glassesRelayDeps.listWorkspaces = async () => [
+      ws('s1', [{ paneId: '%0', agent: 'pi', agentSessionId: 'pi-uuid', agentStatus: 'working' }]),
+    ];
+
+    const sock = new FakeSocket();
+    await subscribeGlassesRelay(sock);
+    await trackGlassesRelay();
+    sock.messages = [];
+
+    open = true;
+    await trackGlassesRelay();
+    const waiting = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(waiting.text).toBe('Continue from the glasses?');
+
+    sock.messages = [];
+    open = false;
+    await trackGlassesRelay();
+    expect(sock.ofType('glasses-relay-remove')).toEqual([
+      { type: 'glasses-relay-remove', id: waiting.id },
+    ]);
+  });
+
   test('several questions: the tab the pane paints is the one served', async () => {
     glassesRelayDeps.readAgentQuestions = async () => ({
       known: true,

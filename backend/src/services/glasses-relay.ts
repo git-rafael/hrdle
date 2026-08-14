@@ -1339,11 +1339,31 @@ function sweepExpiredInfo(): void {
 // Blocked-transition tracker
 // =============================================================================
 
-/** `${sessionId}/${paneId}` → last seen herdr agent_status. */
+/** `${sessionId}/${paneId}` → last seen effective waiting state. */
 const paneStatus = new Map<string, string>();
+
+type RelayPane = NonNullable<WorkspaceInfo['panes']>[number];
 
 function statusKey(sessionId: string, paneId: string): string {
   return `${sessionId}/${paneId}`;
+}
+
+/**
+ * Pi keeps reporting `working` while its ask_user tool owns the TUI. The
+ * structured transcript is authoritative in that interval: treating an
+ * unresolved call as blocked lets the glasses relay present its picker and
+ * remove it again when the matching toolResult arrives.
+ */
+async function effectivePaneStatus(pane: RelayPane): Promise<string> {
+  const status = pane.agentStatus ?? 'unknown';
+  if (
+    subscribers.size === 0 ||
+    status !== 'working' ||
+    pane.agent !== 'pi' ||
+    !pane.agentSessionId
+  ) return status;
+  const record = await glassesRelayDeps.readAgentQuestions(pane.agent, pane.agentSessionId);
+  return record.known && record.questions?.length ? 'blocked' : status;
 }
 
 async function enterBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> {
@@ -1504,7 +1524,7 @@ export async function trackGlassesRelay(): Promise<void> {
     for (const pane of ws.panes ?? []) {
       const key = statusKey(ws.id, pane.paneId);
       seen.add(key);
-      const next = pane.agentStatus ?? 'unknown';
+      const next = await effectivePaneStatus(pane);
       const prev = paneStatus.get(key);
       if (prev === next) {
         // Still blocked is not "nothing happened": the question itself can
@@ -1578,7 +1598,10 @@ export async function buildGlassesRelaySnapshot(): Promise<GlassesRelayItem[]> {
 
   for (const ws of workspaces) {
     const slot = store.get(ws.id);
-    const blocked = (ws.panes ?? []).filter((p) => p.agentStatus === 'blocked').map((p) => p.paneId);
+    const blocked: string[] = [];
+    for (const pane of ws.panes ?? []) {
+      if ((await effectivePaneStatus(pane)) === 'blocked') blocked.push(pane.paneId);
+    }
 
     // Prune stale auto items whose blocked epoch ended while tracking was off.
     // Keyed by the pane they were assembled from, so the key is the test.
