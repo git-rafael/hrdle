@@ -21,4 +21,22 @@ describe('HerdrService agent identity', () => {
     });
     expect(herdrPaneCommand('node-MainThread', pane)).toBe('codex');
   });
+
+  test('keeps the path-valued session reference reported for Pi', () => {
+    const agents = indexHerdrAgentPanes([{
+      pane_id: 'w1:p2',
+      agent: 'pi',
+      agent_status: 'working',
+      agent_session: {
+        kind: 'path',
+        value: '/home/user/.pi/agent/shared-sessions/session.jsonl',
+      },
+    }]);
+
+    expect(agents.get('w1:p2')).toMatchObject({
+      agent: 'pi',
+      sessionId: '/home/user/.pi/agent/shared-sessions/session.jsonl',
+      status: 'working',
+    });
+  });
 });

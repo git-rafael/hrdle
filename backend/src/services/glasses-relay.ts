@@ -859,7 +859,15 @@ function recordedPayload(q: OpenQuestion): WaitingPayload {
   // number of options is finally known - two payload builders each guessing at
   // it separately is how the width came to be wrong in the first place.
   const choiceDetails = q.options.map((o) => (o.description ? normalizeRelayText(o.description) : ''));
-  return { text: clampDisplayWidth(normalizeRelayText(q.question), MAX_TEXT_WIDTH), choices, choiceDetails };
+  const choiceFreeText = q.options.flatMap((o, index) => o.freeText ? [index] : []);
+  return {
+    text: clampDisplayWidth(normalizeRelayText(q.question), MAX_TEXT_WIDTH),
+    choices,
+    choiceDetails,
+    ...(choiceFreeText.length > 0 ? { choiceFreeText } : {}),
+    choiceKeys: q.choiceKeys,
+    choiceSend: q.choiceSend,
+  };
 }
 
 async function assembleWaitingPayload(

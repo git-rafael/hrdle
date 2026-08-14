@@ -102,6 +102,10 @@ const READERS: Partial<Record<AgentProvider, (read: PaneRead) => PaneQuestion | 
   kimi: (r) => readKimiPrompt(r.lines),
   grok: (r) => readGrokPicker(r.lines),
   opencode: readOpenCodePicker,
+  // Pi's structured ask_user calls come from its JSONL record. Registering a
+  // no-op screen reader prevents arbitrary numbered output from becoming a
+  // picker when that record says no question is open.
+  pi: () => undefined,
 };
 
 /**

@@ -85,7 +85,8 @@ export function indexHerdrAgentPanes(
     map.set(record.pane_id, {
       agent: record.agent,
       sessionId:
-        record.agent_session?.kind === 'id' && record.agent_session.value
+        (record.agent_session?.kind === 'id' || record.agent_session?.kind === 'path') &&
+        record.agent_session.value
           ? record.agent_session.value
           : undefined,
       status: record.agent_status,
