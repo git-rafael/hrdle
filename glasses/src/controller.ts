@@ -1599,6 +1599,8 @@ export class GlassesController {
               top.choiceKeys,
               top.choiceFieldRows,
               top.choiceSend,
+              top.text,
+              top.context,
             )
             return
           }
@@ -1638,11 +1640,8 @@ export class GlassesController {
         return
       }
       case 'doubleTap': {
-        // The pin is the innermost level, so it comes off ahead of the banner
-        // dismiss: behind the dismiss, the release was out of reach for as
-        // long as anything stayed queued - and with the refresh honoring the
-        // pin, so was a live transcript. The queued item keeps its turn; it
-        // takes the next double-tap.
+        // The pin is the innermost level, so it comes off before the ordinary
+        // conversation back gesture. The pending question keeps its turn.
         if (this.readerPinned) {
           st.conversationOffset = 0
           st.conversationPage = 0
@@ -1659,13 +1658,11 @@ export class GlassesController {
           this.render()
           return
         }
-        // Double-tap on the overlay banner = dismiss ("later / on PC").
-        const top = this.queue.topWaiting()
-        if (top) {
-          await this.dismissItem(top)
-          return
-        }
-        // Back out one level at a time. Having read some way into the history,
+        // Back out one level at a time. A pending question remains in the
+        // relay queue, so returning to this session can open its picker again.
+        // "Later / on PC" belongs to the full relay overlay where that action
+        // is visible, not to the conversation's ordinary back gesture.
+        // Having read some way into the history,
         // the way out is to the top of it — swiping all the way down again to
         // leave is the wrong amount of work. Only from the newest message does
         // the same gesture leave the session.
@@ -2540,6 +2537,8 @@ export class GlassesController {
         item.choiceKeys,
         item.choiceFieldRows,
         item.choiceSend,
+        item.text,
+        item.context,
       )
       void this.loadConversation().then(() => this.render())
       return
@@ -2592,6 +2591,8 @@ export class GlassesController {
     keys?: string[],
     fieldRows?: number[],
     send?: string,
+    question?: string,
+    context?: string,
   ): void {
     const keepCursor =
       this.state.mode === 'choice' &&
@@ -2601,6 +2602,8 @@ export class GlassesController {
     this.choiceTarget = target
     this.choiceFollowUntil = 0
     this.state.choiceOptions = options
+    this.state.choiceQuestion = question
+    this.state.choiceContext = context
     // Cleared when absent rather than left alone: a locally scraped picker
     // carries none, and the previous question's descriptions under this one's
     // options would be answering something nobody asked.
@@ -2887,6 +2890,8 @@ export class GlassesController {
         item.choiceKeys,
         item.choiceFieldRows,
         item.choiceSend,
+        item.text,
+        item.context,
       )
       return
     }

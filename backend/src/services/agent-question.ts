@@ -39,6 +39,7 @@ export interface QuestionOption {
 
 export interface OpenQuestion {
   question: string;
+  context?: string;
   options: QuestionOption[];
   multiSelect: boolean;
   /**
@@ -231,6 +232,7 @@ export async function openKimiQuestions(sessionId: string, store = new KimiSessi
 
 interface PiQuestionArguments {
   question?: unknown;
+  context?: unknown;
   options?: unknown;
   allowMultiple?: unknown;
   allowFreeform?: unknown;
@@ -281,6 +283,9 @@ function piOpenQuestion(args: PiQuestionArguments): OpenQuestion | undefined {
   });
   return {
     question: args.question.trim(),
+    ...(typeof args.context === 'string' && args.context.trim()
+      ? { context: args.context.trim() }
+      : {}),
     options,
     multiSelect,
     ambiguous: false,

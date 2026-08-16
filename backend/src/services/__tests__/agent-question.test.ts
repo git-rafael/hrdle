@@ -251,6 +251,17 @@ describe('pi', () => {
     });
   });
 
+  test('an ask_user call preserves its context', async () => {
+    const { path, store } = piSession([
+      piSessionEntry,
+      piAskEntry('ask-context', { context: 'Choose the safest delivery for the trial.' }),
+    ]);
+
+    expect((await openPiQuestion(path, store))?.context).toBe(
+      'Choose the safest delivery for the trial.',
+    );
+  });
+
   test('a resolved ask_user call is no longer open', async () => {
     const { path, store } = piSession([
       piSessionEntry,
