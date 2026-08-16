@@ -28,6 +28,7 @@ function platform(): GlassesPlatform {
 }
 
 type Internals = {
+  handle(action: 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'): Promise<void>
   onRelayUpsert(item: GlassesRelayItem): void
   onRelaySnapshot(items: GlassesRelayItem[]): void
 }
@@ -71,6 +72,20 @@ describe('what the server asks for', () => {
     const c = reading()
     inner(c).onRelayUpsert(item({ sessionId: 's1' }))
     expect(modeOf(c)).toBe('overlay')
+  })
+
+  test('opening a structured question carries its context into the picker', async () => {
+    const c = reading()
+    inner(c).onRelayUpsert(item({
+      context: 'The trial must stay reversible.',
+      choices: ['Patch', 'Fork'],
+    }))
+
+    await inner(c).handle('tap')
+
+    expect(modeOf(c)).toBe('choice')
+    expect(c.state.choiceContext).toBe('The trial must stay reversible.')
+    expect(c.state.choiceQuestion).toBe('Which migration?')
   })
 
   test('a notice yields to the session it is about', () => {

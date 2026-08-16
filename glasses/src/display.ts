@@ -238,6 +238,10 @@ export interface AppState {
   autoAdvance?: boolean
   choiceIndex: number
   choiceOptions: string[]
+  /** Optional decision context shown before the question and options. */
+  choiceContext?: string
+  /** The question whose options are being selected. */
+  choiceQuestion?: string
   /**
    * What each option says about itself, index-aligned with `choiceOptions`.
    *
@@ -1327,15 +1331,16 @@ function conversationContent(state: AppState): {
   // decision: the page was built to `bodyLines` above, and anything past it
   // here would be a line the next page does not begin with.
   const bodyText = content.slice(0, bodyLines).join('\n')
-  // With a waiting banner up, the ring is routed to the overlay item:
-  // tap = respond/jump, double-tap = dismiss ("later / on PC").
+  // With a waiting banner up, tap opens the pending question. Double-tap is
+  // still the conversation's ordinary back gesture; deferring a question is
+  // available on the full relay overlay where that action is visible.
   // Read some way back, the double-tap returns to the newest message rather
   // than leaving the session, so the label has to say which one it will do.
   const scrolled = state.conversationOffset > 0 || state.conversationPage > 0
   const back = scrolled ? 'dbl:top' : 'dbl:back'
-  const action = state.relayWaiting.length > 0
-    ? 'tap:respond  dbl:later'
-    : waiting ? `tap:respond  ${back}` : back
+  const action = state.relayWaiting.length > 0 || waiting
+    ? `tap:respond  ${back}`
+    : back
   // Who is speaking is in the body — the user's turn carries `$` and the
   // agent's carries nothing — so repeating it here said nothing twice. The
   // message counter went with it: its denominator was the number of messages
@@ -1596,7 +1601,25 @@ export function onChoiceSend(state: AppState): boolean {
 }
 
 function choiceBody(state: AppState): string {
-  return choiceWindow(choiceBlocks(state), state.choiceIndex, MAX_LINES).join('\n')
+  const blocks = choiceBlocks(state)
+  const prelude: string[] = []
+  const takeLines = (text: string, limit: number): string[] => {
+    const lines = splitLines(stripUnrenderable(text), BODY_WIDTH)
+    if (lines.length <= limit) return lines
+    const kept = lines.slice(0, limit)
+    kept[kept.length - 1] = ellipsize(kept[kept.length - 1])
+    return kept
+  }
+  const preludeLimit = 3
+  if (state.choiceContext) {
+    const questionReserve = state.choiceQuestion ? 1 : 0
+    prelude.push(...takeLines(state.choiceContext, preludeLimit - questionReserve))
+  }
+  if (state.choiceQuestion && prelude.length < preludeLimit) {
+    prelude.push(...takeLines(state.choiceQuestion, preludeLimit - prelude.length))
+  }
+  const options = choiceWindow(blocks, state.choiceIndex, MAX_LINES - prelude.length)
+  return [...prelude, ...options].join('\n')
 }
 
 /**
@@ -1687,7 +1710,10 @@ function overlayContent(state: AppState): { headerText: string; bodyText: string
 
   // Wrapped to the card, not to the panel. The box is narrower than the body it
   // replaces, and text measured against the wider one runs under the border.
-  const lines = splitLines(item.text, CARD_WIDTH)
+  const lines = item.context
+    ? splitLines(item.context, CARD_WIDTH)
+    : []
+  lines.push(...splitLines(item.text, CARD_WIDTH))
   if (item.choices?.length) {
     lines.push(CARD_SEPARATOR)
     for (let i = 0; i < item.choices.length; i++) {

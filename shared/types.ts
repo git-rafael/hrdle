@@ -1368,8 +1368,10 @@ export interface GlassesRelayItem {
   /** tmux pane id ("%N") of the blocked pane — reply routing for multi-pane. */
   paneId?: string;
   kind: 'waiting' | 'info';
-  /** display-width-clamped text (≈ one G2 page, 189 Japanese chars). */
+  /** display-width-clamped question text (≈ one G2 page, 189 Japanese chars). */
   text: string;
+  /** Optional decision context shown before the question and choices. */
+  context?: string;
   /**
    * Scraped or agent-declared choices; the glasses prefer these over a
    * terminal re-scrape.

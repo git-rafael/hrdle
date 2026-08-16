@@ -794,6 +794,7 @@ export function choiceKeysOf(picker: PaneQuestion, fieldRows: number[] | undefin
 
 interface WaitingPayload {
   text: string;
+  context?: string;
   choices?: string[];
   /** Index-aligned with `choices`, empty where an option had nothing to say. */
   choiceDetails?: string[];
@@ -852,6 +853,9 @@ function recordedPayload(q: OpenQuestion): WaitingPayload {
   const choiceFreeText = q.options.flatMap((o, index) => o.freeText ? [index] : []);
   return {
     text: clampDisplayWidth(normalizeRelayText(q.question), MAX_TEXT_WIDTH),
+    ...(q.context
+      ? { context: clampDisplayWidth(normalizeRelayText(q.context), MAX_TEXT_WIDTH) }
+      : {}),
     choices,
     choiceDetails,
     ...(choiceFreeText.length > 0 ? { choiceFreeText } : {}),
@@ -1013,6 +1017,7 @@ function makeItem(
   choices?: string[],
   ttlMs: number = INFO_TTL_MS,
   answering?: {
+    context?: string;
     choiceInput?: GlassesRelayItem['choiceInput'];
     choiceSelected?: number;
     choiceDetails?: string[];
@@ -1034,6 +1039,7 @@ function makeItem(
     kind,
     source,
     text: clampDisplayWidth(normalizeRelayText(text), MAX_TEXT_WIDTH) || '(empty)',
+    ...(answering?.context ? { context: answering.context } : {}),
     // Set here rather than at each call site so every item carries one: the
     // app obeys this field and has no rule of its own to fall back on, and an
     // item that forgot it would be the one nobody is shown.
@@ -1137,6 +1143,7 @@ function waitingItem(sessionId: string, paneId: string, payload: WaitingPayload)
     payload.choices,
     INFO_TTL_MS,
     {
+      context: payload.context,
       choiceInput: payload.choiceInput,
       choiceSelected: payload.choiceSelected,
       choiceDetails: payload.choiceDetails,
@@ -1446,7 +1453,11 @@ async function refreshBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> 
   // Updated in place instead. The client keys by id, so the same id is an edit
   // and a new one is an interruption - which is the actual difference between
   // "the cursor moved" and "it is asking something else".
-  if (next.text === item.text && sameChoices(item.choices, next.choices)) {
+  if (
+    next.text === item.text &&
+    itemContext(next) === itemContext(item) &&
+    sameChoices(item.choices, next.choices)
+  ) {
     const sameDetails = sameChoices(item.choiceDetails, next.choiceDetails);
     // Both of these are measured from where the pane's cursor is, so both go
     // stale the moment it moves - which a walk to a field row does, without
@@ -1476,6 +1487,11 @@ async function refreshBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> 
 function sameChoices(a: string[] | undefined, b: string[] | undefined): boolean {
   if (a === undefined || b === undefined) return a === b;
   return a.length === b.length && a.every((x, i) => x === b[i]);
+}
+
+function itemContext(item: GlassesRelayItem): string | undefined {
+  const context = Reflect.get(item, 'context');
+  return typeof context === 'string' ? context : undefined;
 }
 
 /**

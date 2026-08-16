@@ -222,8 +222,10 @@ export interface GlassesRelayItem {
   /** tmux pane id ("%N") of the blocked pane — reply routing for multi-pane. */
   paneId?: string
   kind: 'waiting' | 'info'
-  /** display-width-clamped text (≈ one G2 page). */
+  /** display-width-clamped question text (≈ one G2 page). */
   text: string
+  /** Optional decision context shown before the question and choices. */
+  context?: string
   /** Scraped or agent-declared choices; preferred over a terminal re-scrape.
    *  The label alone - the description travels in `choiceDetails`. */
   choices?: string[]

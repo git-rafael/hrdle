@@ -1236,6 +1236,20 @@ describe('notice dialog (overlay)', () => {
     expect(s.footer).toContain('tap:choices')
   })
 
+  test('a question shows context before its wording and choices', () => {
+    const s = screenText(mk({
+      relayWaiting: [relayItem('waiting', 'w1', 'Which approach?', {
+        context: 'The trial must stay reversible.',
+        choices: ['Patch', 'Fork'],
+      })],
+      overlayItemId: 'w1',
+    }))
+
+    expect(s.body.indexOf('The trial must stay reversible.')).toBeGreaterThanOrEqual(0)
+    expect(s.body.indexOf('Which approach?')).toBeGreaterThan(s.body.indexOf('The trial must stay reversible.'))
+    expect(s.body.indexOf('1. Patch')).toBeGreaterThan(s.body.indexOf('Which approach?'))
+  })
+
   test('a queue of one drops the counter and the swipe hint', () => {
     const s = screenText(mk({
       relayInfo: [relayItem('info', 'i1', 'done')],

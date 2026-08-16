@@ -71,6 +71,35 @@ describe('an option and what it says about itself', () => {
   })
 })
 
+describe('the question before its options', () => {
+  test('context and question precede the selectable rows', () => {
+    const lines = bodyLines(st({
+      choiceContext: 'The trial must stay reversible.',
+      choiceQuestion: 'Which delivery should we use?',
+      choiceOptions: ['Patch', 'Fork'],
+      choiceDetails: undefined,
+    }))
+
+    expect(lines[0]).toBe('The trial must stay reversible.')
+    expect(lines[1]).toBe('Which delivery should we use?')
+    expect(lines[2]).toContain('Patch')
+  })
+
+  test('a long option description cannot push context or question off-screen', () => {
+    const lines = bodyLines(st({
+      choiceContext: 'The trial must stay reversible.',
+      choiceQuestion: 'Which delivery should we use?',
+      choiceOptions: ['Patch', 'Fork'],
+      choiceDetails: ['This explanation is deliberately long. '.repeat(20), ''],
+    }))
+
+    expect(lines[0]).toBe('The trial must stay reversible.')
+    expect(lines[1]).toBe('Which delivery should we use?')
+    expect(lines.some((line) => line.includes('Patch'))).toBe(true)
+    expect(lines.length).toBeLessThanOrEqual(MAX_LINES)
+  })
+})
+
 describe('when there is nothing to add', () => {
   test('an older server sends no details and the labels are the whole picker', () => {
     expect(bodyLines(st({ choiceDetails: undefined }))).toHaveLength(2)

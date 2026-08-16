@@ -1762,6 +1762,53 @@ describe('recorded questions beat the scrape', () => {
     expect(item.choiceKeys).toEqual(['1\r', '2\r', '1\u001b[B\u001b[B\r']);
   });
 
+  test('a recorded Pi question relays context separately from the question', async () => {
+    glassesRelayDeps.readAgentQuestions = async () => ({
+      known: true,
+      questions: [{
+        question: 'Which delivery should we use?',
+        context: 'The trial must stay reversible.',
+        options: [{ label: 'Patch' }, { label: 'Fork' }],
+        multiSelect: false,
+        ambiguous: false,
+        choiceKeys: ['1\r', '2\r'],
+      }],
+    });
+    const sock = await blockedClaudePane(QUESTION_PANE, 'pi');
+
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.text).toBe('Which delivery should we use?');
+    expect(item.context).toBe('The trial must stay reversible.');
+  });
+
+  test('different context makes identical wording and options a new decision', async () => {
+    let context = 'The first service owns rollback.';
+    glassesRelayDeps.readAgentQuestions = async () => ({
+      known: true,
+      questions: [{
+        question: 'Which delivery should we use?',
+        context,
+        options: [{ label: 'Patch' }, { label: 'Fork' }],
+        multiSelect: false,
+        ambiguous: false,
+        choiceKeys: ['1\r', '2\r'],
+      }],
+    });
+    const sock = await blockedClaudePane(QUESTION_PANE, 'pi');
+    const first = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    sock.messages = [];
+
+    context = 'The second service owns rollback.';
+    await trackGlassesRelay();
+
+    const next = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(next.id).not.toBe(first.id);
+    expect(next.context).toBe('The second service owns rollback.');
+    expect(sock.ofType('glasses-relay-remove')).toEqual([
+      { type: 'glasses-relay-remove', id: first.id },
+    ]);
+  });
+
   test('an open Pi record reaches a fresh glasses subscriber while Herdr still says working', async () => {
     glassesRelayDeps.readAgentQuestions = async () => ({
       known: true,
