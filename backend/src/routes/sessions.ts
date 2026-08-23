@@ -241,12 +241,16 @@ export function publicAgentSessionId(
   herdrSessionId: string | undefined,
   resolvedSessionId?: string,
 ): string | undefined {
-  if (resolvedSessionId) return resolvedSessionId;
   // Pi reports a trusted local JSONL path through herdr, but public history
   // routes accept only the canonical UUID read from that transcript. If the
-  // transcript is temporarily unavailable, omit the identity rather than
-  // exposing a host path that public clients cannot safely resolve.
-  return agent === 'pi' ? undefined : herdrSessionId;
+  // transcript is temporarily unavailable or malformed, omit the identity
+  // rather than exposing a value public clients cannot safely resolve.
+  if (agent === 'pi') {
+    return resolvedSessionId && isCanonicalPiSessionId(resolvedSessionId)
+      ? resolvedSessionId
+      : undefined;
+  }
+  return resolvedSessionId || herdrSessionId;
 }
 
 export const sessions = new Hono();

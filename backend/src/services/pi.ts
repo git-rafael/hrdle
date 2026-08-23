@@ -176,6 +176,7 @@ export function piSessionMetadata(
     !header ||
     header.version !== 3 ||
     typeof header.id !== 'string' ||
+    !isCanonicalPiSessionId(header.id) ||
     typeof header.cwd !== 'string'
   ) {
     return undefined;
@@ -312,7 +313,7 @@ async function mapWithConcurrency<T, R>(
       const index = next++;
       results[index] = await fn(values[index]);
     }
-    return;
+    return undefined;
   });
   await Promise.all(workers);
   return results;

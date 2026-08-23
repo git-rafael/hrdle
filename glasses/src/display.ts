@@ -1687,24 +1687,33 @@ export function onChoiceSend(state: AppState): boolean {
   return state.choiceMulti === true && state.choiceIndex >= state.choiceOptions.length
 }
 
-function choiceBody(state: AppState): string {
-  const blocks = choiceBlocks(state)
+function decisionPrelude(
+  context: string | undefined,
+  question: string | undefined,
+  width: number,
+): string[] {
   const prelude: string[] = []
   const takeLines = (text: string, limit: number): string[] => {
-    const lines = splitLines(stripUnrenderable(text), BODY_WIDTH)
+    const lines = splitLines(stripUnrenderable(text), width)
     if (lines.length <= limit) return lines
     const kept = lines.slice(0, limit)
     kept[kept.length - 1] = ellipsize(kept[kept.length - 1])
     return kept
   }
   const preludeLimit = 3
-  if (state.choiceContext) {
-    const questionReserve = state.choiceQuestion ? 1 : 0
-    prelude.push(...takeLines(state.choiceContext, preludeLimit - questionReserve))
+  if (context) {
+    const questionReserve = question ? 1 : 0
+    prelude.push(...takeLines(context, preludeLimit - questionReserve))
   }
-  if (state.choiceQuestion && prelude.length < preludeLimit) {
-    prelude.push(...takeLines(state.choiceQuestion, preludeLimit - prelude.length))
+  if (question && prelude.length < preludeLimit) {
+    prelude.push(...takeLines(question, preludeLimit - prelude.length))
   }
+  return prelude
+}
+
+function choiceBody(state: AppState): string {
+  const blocks = choiceBlocks(state)
+  const prelude = decisionPrelude(state.choiceContext, state.choiceQuestion, BODY_WIDTH)
   const options = choiceWindow(blocks, state.choiceIndex, MAX_LINES - prelude.length)
   return [...prelude, ...options].join('\n')
 }
@@ -1797,10 +1806,13 @@ function overlayContent(state: AppState): { headerText: string; bodyText: string
 
   // Wrapped to the card, not to the panel. The box is narrower than the body it
   // replaces, and text measured against the wider one runs under the border.
-  const lines = item.context
-    ? splitLines(item.context, CARD_WIDTH)
-    : []
-  lines.push(...splitLines(item.text, CARD_WIDTH))
+  // A decision reserves its first three lines for context and question so the
+  // card always leaves room to show that there are choices to open.
+  const lines = item.choices?.length
+    ? decisionPrelude(item.context, item.text, CARD_WIDTH)
+    : item.context
+      ? [...splitLines(item.context, CARD_WIDTH), ...splitLines(item.text, CARD_WIDTH)]
+      : splitLines(item.text, CARD_WIDTH)
   if (item.choices?.length) {
     lines.push(CARD_SEPARATOR)
     for (let i = 0; i < item.choices.length; i++) {

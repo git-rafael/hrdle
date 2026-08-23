@@ -26,7 +26,7 @@ import {
   setLine,
 } from '../services/steward-store';
 import { fitToPage } from '../services/steward-text';
-import type { StewardThreadItem, StewardTurn } from '../../../shared/types';
+import { AGENT_PROVIDER_IDS, type StewardThreadItem, type StewardTurn } from '../../../shared/types';
 
 // Same alphabet as SessionIdSchema.
 const SessionId = z.string().regex(/^[A-Za-z0-9._-]{1,128}$/);
@@ -112,6 +112,7 @@ const RefsSchema = z.object({
 
 const SourceSchema = z.object({
   agentSessionId: z.string().min(1).max(200),
+  agent: z.enum(AGENT_PROVIDER_IDS).optional(),
   messageIds: z.array(z.string().min(1).max(200)).max(200).optional(),
 });
 

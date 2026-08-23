@@ -13,6 +13,7 @@ import {
 } from "../../hooks/useChatFontSize";
 import { useStewardSession } from "../../hooks/useSteward";
 import { useStickToBottom } from "../../hooks/useStickToBottom";
+import { stewardConversationSource, stewardSourceConversationPath, type StewardConversationSource } from "../../utils/stewardSource";
 import { authFetch } from "../../services/api";
 import { ConversationViewer } from "../ConversationViewer";
 import { StewardSessionComposer } from "../steward/StewardSessionComposer";
@@ -59,7 +60,7 @@ export function StewardSessionView({
 	// keeps the workspace's own, which is what it always had.
 	const historyPane = (agentPaneCount ?? 0) > 1 ? paneId : undefined;
 	const { turns, waiting, thinking } = useStewardSession(sessionId, true, historyPane);
-	const [source, setSource] = useState<{ agentSessionId: string; messageId?: string } | null>(null);
+	const [source, setSource] = useState<StewardConversationSource | null>(null);
 	const [sourceMessages, setSourceMessages] = useState<ConversationMessage[]>([]);
 	const [sourceLoading, setSourceLoading] = useState(false);
 	const scrollerRef = useRef<HTMLDivElement>(null);
@@ -73,13 +74,13 @@ export function StewardSessionView({
 	const chatFont = useChatFontSize();
 	usePinchFontSize(scrollerRef, chatFont);
 
-	const openSource = async (next: { agentSessionId: string; messageId?: string }) => {
+	const openSource = async (next: StewardConversationSource) => {
 		setSource(next);
 		setSourceMessages([]);
 		setSourceLoading(true);
 		try {
 			const res = await authFetch(
-				`${API_BASE}/api/sessions/history/${encodeURIComponent(next.agentSessionId)}/conversation`,
+				`${API_BASE}${stewardSourceConversationPath(next)}`,
 				{ cache: "no-store" },
 			);
 			const body = res.ok ? ((await res.json()) as { messages?: ConversationMessage[] }) : null;
@@ -189,7 +190,7 @@ function TurnCard({
 	newest?: boolean;
 	/** The pane's own agent session, for a turn that named no source of its own. */
 	fallbackSession?: string | null;
-	onOpenSource: (source: { agentSessionId: string; messageId?: string }) => void;
+	onOpenSource: (source: StewardConversationSource) => void;
 	/** A picture finishing loading changes the height after the scroll. */
 	onGrow: () => void;
 }) {
@@ -198,17 +199,15 @@ function TurnCard({
 	// Only where the turn names its own source. The pane-level fallback put this
 	// on all 60 bubbles of a real session - 32px each, a quarter of the reading
 	// area spent on a link that mostly opened the same conversation.
-	const sourceSession = turn.source?.agentSessionId ?? null;
+	const source = turn.source ? stewardConversationSource(turn.source) : null;
 
 	return (
 		<div className={mine ? "flex justify-end" : ""}>
 			<div className={`max-w-[90%] rounded-xl px-3 py-2 text-[1em] ${speakerSurface(turn.role)}`}>
-				{sourceSession && (
+				{source && (
 					<button
 						type="button"
-						onClick={() =>
-							onOpenSource({ agentSessionId: sourceSession, messageId: turn.source?.messageIds?.[0] })
-						}
+						onClick={() => onOpenSource(source)}
 						aria-label={t("steward.seeOriginal", "元の会話を見る")}
 						title={t("steward.seeOriginal", "元の会話を見る")}
 						className="-mr-1 float-right ml-2 flex h-8 w-8 items-center justify-center text-cv-text-muted hover:text-cv-text"

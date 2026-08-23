@@ -29,6 +29,7 @@ import { isSafePeerUrl } from '../services/peer-url';
 import { discoverPeers } from '../services/peer-discovery';
 import { buildSessionsList, sessionHistoryService, agentHistoryProviders } from './sessions';
 import { getDashboard } from './dashboard';
+import { isCanonicalPiSessionId } from '../services/pi';
 import { saveUploadedImage } from './upload';
 import type { DashboardResponse } from '../../../shared/types';
 
@@ -310,6 +311,10 @@ peers.get('/history/:peerId/:sessionId/conversation', async (c) => {
   const projectDirName = c.req.query('projectDirName');
   const lastQuery = c.req.query('last');
   const last = lastQuery ? parseInt(lastQuery, 10) : undefined;
+
+  if (agent === 'pi' && !isCanonicalPiSessionId(sessionId)) {
+    return c.json({ error: 'Invalid Pi session id' }, 400);
+  }
 
   if (peer.url === SELF_PEER_URL) {
     const provider = agent && isAgentProvider(agent) ? agentHistoryProviders[agent] : undefined;

@@ -1250,6 +1250,22 @@ describe('notice dialog (overlay)', () => {
     expect(s.body.indexOf('1. Patch')).toBeGreaterThan(s.body.indexOf('Which approach?'))
   })
 
+  test('long decision text still leaves a visible choice', () => {
+    const s = screenText(mk({
+      relayWaiting: [relayItem('waiting', 'w1', 'Which delivery path should we use? '.repeat(12), {
+        context: 'Context marker for a reversible trial. '.repeat(12),
+        choices: ['Patch', 'Fork'],
+      })],
+      overlayItemId: 'w1',
+    }))
+    const lines = s.body.split('\n')
+
+    expect(lines.length).toBeLessThanOrEqual(CARD_LINES)
+    expect(lines[0]).toContain('Context marker')
+    expect(lines.some((line) => line.includes('Which delivery'))).toBe(true)
+    expect(lines.some((line) => line.includes('1. Patch'))).toBe(true)
+  })
+
   test('a queue of one drops the counter and the swipe hint', () => {
     const s = screenText(mk({
       relayInfo: [relayItem('info', 'i1', 'done')],

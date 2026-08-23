@@ -94,15 +94,15 @@ dismissal behavior. Reader pin/release remains the innermost double-tap action.
 
 ## Validation Environments
 
-### Current v0.3.169 Port
+### Current v0.3.189 Port
 
 Automated validation was performed on 2026-08-23 with:
 
-- Hrdle v0.3.169, based on upstream commit `42957bac`;
-- branch `feature/pi-adapter-trial-v0.3.169`;
+- Hrdle v0.3.189, based on upstream main commit `286d5733`;
+- branch `feature/pi-adapter-trial-v0.3.189`;
 - Bun v1.3.3;
 - NixOS on x86_64 Linux;
-- G2 companion manifest `com.hrdle.glasses` v0.0.82.
+- G2 companion manifest `com.hrdle.glasses` v0.0.85.
 
 The current port has not yet completed physical G2 validation. In particular,
 context rendering and pending-picker restoration remain publication gates.
@@ -126,7 +126,7 @@ UUID, transcript path, or local home path is included in this document.
 
 ## Automated Verification
 
-The following checks pass against the v0.3.169 port:
+The following checks pass against the v0.3.189 port:
 
 ```bash
 bun run --cwd shared typecheck
@@ -138,10 +138,15 @@ bun run --cwd backend test
 bun run --cwd frontend test
 bun run --cwd glasses test
 
-bun run lint
 bun run build
 bun run build:binary
 ```
+
+Biome lint passes on all files changed by the port. The repository-wide lint
+command still reports an upstream error in unchanged
+`frontend/src/utils/stl-render.ts`: Biome classifies WebGL's
+`gl.useProgram(...)` as a conditional React hook call. This is reproducible at
+upstream commit `286d5733` and is not changed or suppressed by the Pi port.
 
 Focused coverage includes:
 
@@ -149,7 +154,7 @@ Focused coverage includes:
   lifecycle commands;
 - herdr `id` and `path` session references;
 - canonical UUID resolution, trusted Pi paths, Pi v3 header validation, public
-  path rejection, and omission when canonicalization fails;
+  and self-peer path rejection, and omission when canonicalization fails;
 - distinct canonical identities for multiple Pi panes;
 - active-branch reconstruction and abandoned-branch exclusion;
 - append-only cache updates;
@@ -162,13 +167,17 @@ Focused coverage includes:
   transition;
 - context propagation through the backend, shared wire type, G2 overlay, and
   picker;
-- context-aware relay refresh and display-line reservation;
+- context-aware relay refresh and display-line reservation in both the overlay
+  and picker, including long decision text that must leave a visible choice;
 - cancel, leave, return, and reopen navigation without a dismiss request;
-- coexistence with the upstream reader pin/release behavior.
+- coexistence with the upstream reader pin/release behavior;
+- Steward source links that preserve the Pi provider when opening the original
+  conversation.
 
-The expanded focused suite passed 407 tests with 838 expectations. The complete
-G2 suite passed 554 tests with 1,307 expectations. Error-level LSP diagnostics
-and `git diff --check` were also clean for the current changes.
+The expanded focused suite passed 522 tests with 1,071 expectations. The complete
+backend, frontend, and G2 suites passed 1,244, 268, and 600 tests respectively,
+with zero failures. The G2 suite recorded 1,380 expectations. Error-level LSP
+diagnostics and `git diff --check` were also clean for the current changes.
 
 ## Historical Physical G2 Verification
 
@@ -194,7 +203,7 @@ The UUID and device identifiers are intentionally omitted.
 
 ## Pending Physical G2 Verification
 
-The v0.3.169 binary and v0.0.82 companion must pass these tests one at a time
+The v0.3.189 binary and v0.0.85 companion must pass these tests one at a time
 before the branch is pushed:
 
 | Test | Procedure | Expected result | Status |
@@ -204,8 +213,8 @@ before the branch is pushed:
 
 ## Known Caveats
 
-- Hrdle v0.3.169 still declares herdr protocol 16 as tested. The historical trial
-  used protocol 20 successfully, but the current v0.3.169 binary must repeat the
+- Hrdle v0.3.189 still declares herdr protocol 16 as tested. The historical trial
+  used protocol 20 successfully, but the current v0.3.189 binary must repeat the
   runtime protocol smoke test.
 - The transcript cache is bounded by session count, not total bytes. Opening
   several unusually large Pi histories can increase Hrdle memory use and should
@@ -216,16 +225,16 @@ before the branch is pushed:
   `PI_ASK_USER_ALLOW_COMMENT` environment. A Pi pane launched with a different
   value can disagree with that inferred row count.
 - Pi usage metrics and Pi-specific hook notifications are intentionally absent.
-- The context and picker-restoration behavior requires the updated v0.0.82 G2
+- The context and picker-restoration behavior requires the updated v0.0.85 G2
   companion; the base Pi picker remains compatible with older companions.
 
 ## Verification Summary
 
-The Pi adapter has been ported onto Hrdle v0.3.169 and passes workspace
-TypeScript checks, backend/frontend/glasses tests, lint, production builds,
-binary build, focused security/session-identity regressions, and G2 controller
-regressions. Historical physical testing established the base adapter's voice,
-conversation, picker, selection, free-text, scrolling, and session-continuity
-behavior on v0.3.126. Publication of the v0.3.169 branch remains gated on a new
-runtime smoke test and physical validation of context rendering and pending
-picker restoration with companion v0.0.82.
+The Pi adapter has been ported onto Hrdle v0.3.189 and passes workspace
+TypeScript checks, backend/frontend/glasses tests, changed-file lint, production
+builds, binary build, focused security/session-identity regressions, and G2
+controller regressions. Historical physical testing established the base
+adapter's voice, conversation, picker, selection, free-text, scrolling, and
+session-continuity behavior on v0.3.126. Publication of the v0.3.189 branch
+remains gated on a new runtime smoke test and physical validation of context
+rendering and pending picker restoration with companion v0.0.85.

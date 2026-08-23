@@ -173,6 +173,18 @@ describe('PiSessionStore', () => {
     expect(await store.getPublicActiveEntries(outside)).toBeUndefined();
   });
 
+  test('rejects a path whose Pi v3 header has a non-canonical session id', async () => {
+    const outside = join(TEST_DIR, 'non-canonical-id.jsonl');
+    const entries = PI_JSONL.split('\n').map((line, index) => {
+      if (index !== 0) return line;
+      return JSON.stringify({ ...JSON.parse(line), id: 'not-a-uuid' });
+    });
+    await writeFile(outside, entries.join('\n'));
+    const store = new PiSessionStore([SHARED_DIR, PROJECTS_DIR]);
+
+    expect(await store.findSession(outside)).toBeUndefined();
+  });
+
   test('rejects a path that is not a Pi v3 session', async () => {
     const outside = join(TEST_DIR, 'outside.jsonl');
     await writeFile(outside, '{"type":"other","id":"not-pi"}\n');

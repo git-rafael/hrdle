@@ -238,7 +238,7 @@ function checkRateLimit(sessionId: string): boolean {
 
 /** Minimal structural type so tests can pass a fake socket. */
 export interface RelaySocket {
-  send(data: string): unknown;
+  send(data: string): void;
 }
 
 const subscribers = new Set<RelaySocket>();
@@ -1500,8 +1500,7 @@ function sameChoices(a: string[] | undefined, b: string[] | undefined): boolean 
 }
 
 function itemContext(item: GlassesRelayItem): string | undefined {
-  const context = Reflect.get(item, 'context');
-  return typeof context === 'string' ? context : undefined;
+  return item.context;
 }
 
 /**

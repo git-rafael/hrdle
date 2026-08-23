@@ -82,6 +82,21 @@ describe('the thread', () => {
     expect(body.askId).toBe(body.item.id);
   });
 
+  test('a source keeps the provider needed to open its original conversation', async () => {
+    const body = (await (
+      await post('/api/steward/thread', {
+        kind: 'notify',
+        text: 'Pi completed the task',
+        source: { agentSessionId: '019ffb3b-0c1b-71b9-b575-45677d8737ed', agent: 'pi' },
+      })
+    ).json()) as { item: { source?: { agentSessionId: string; agent?: string } } };
+
+    expect(body.item.source).toEqual({
+      agentSessionId: '019ffb3b-0c1b-71b9-b575-45677d8737ed',
+      agent: 'pi',
+    });
+  });
+
   test('a reply records the answer and reads back as its own turn', async () => {
     const asked = (await (
       await post('/api/steward/thread', { kind: 'ask', text: 'deploy?', choices: ['yes', 'no'] })

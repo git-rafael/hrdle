@@ -12,6 +12,7 @@ import {
 	usePinchFontSize,
 } from "../../hooks/useChatFontSize";
 import { useSteward } from "../../hooks/useSteward";
+import { stewardConversationSource, stewardSourceConversationPath, type StewardConversationSource } from "../../utils/stewardSource";
 import { authFetch } from "../../services/api";
 import { ConversationViewer } from "../ConversationViewer";
 import { AskControls } from "./AskControls";
@@ -23,10 +24,7 @@ import { TurnImages } from "./TurnImages";
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 /** Where a turn was summarised from, once someone asks to see it. */
-interface OpenSource {
-	agentSessionId: string;
-	messageId?: string;
-}
+type OpenSource = StewardConversationSource;
 
 /**
  * The steward's own conversation, on a screen wide enough to show what the
@@ -59,7 +57,7 @@ export function StewardView({ onClose }: { onClose: () => void }) {
 		setSourceLoading(true);
 		try {
 			const res = await authFetch(
-				`${API_BASE}/api/sessions/history/${encodeURIComponent(next.agentSessionId)}/conversation`,
+				`${API_BASE}${stewardSourceConversationPath(next)}`,
 				{ cache: "no-store" },
 			);
 			const body = res.ok ? ((await res.json()) as { messages?: ConversationMessage[] }) : null;
@@ -215,6 +213,7 @@ function ThreadItem({
 }) {
 	const { t } = useTranslation();
 	const mine = item.role === "user";
+	const source = item.source ? stewardConversationSource(item.source) : null;
 
 	return (
 		<div className={mine ? "flex justify-end" : ""}>
@@ -227,15 +226,10 @@ function ThreadItem({
 					<p className="mb-1 font-medium text-[length:var(--cv-fs-meta,12px)] text-cv-text-muted">{item.sessionId}</p>
 				)}
 
-				{item.source && (
+				{source && (
 					<button
 						type="button"
-						onClick={() =>
-							onOpenSource({
-								agentSessionId: item.source?.agentSessionId ?? "",
-								messageId: item.source?.messageIds?.[0],
-							})
-						}
+						onClick={() => onOpenSource(source)}
 						aria-label={t("steward.seeOriginal", "元の会話を見る")}
 						title={t("steward.seeOriginal", "元の会話を見る")}
 						className="-mr-1 float-right ml-2 flex h-8 w-8 items-center justify-center text-cv-text-muted hover:text-cv-text"

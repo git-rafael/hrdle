@@ -9,6 +9,7 @@ describe('publicAgentSessionId', () => {
     const path = '/home/user/.pi/agent/shared-sessions/first.jsonl';
 
     expect(publicAgentSessionId('pi', path, FIRST_PI_ID)).toBe(FIRST_PI_ID);
+    expect(publicAgentSessionId('pi', path, 'not-a-uuid')).toBeUndefined();
     expect(publicAgentSessionId('pi', path)).toBeUndefined();
   });
 

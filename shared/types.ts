@@ -1856,7 +1856,7 @@ export interface StewardTurn {
   refs?: { file?: string; line?: number; url?: string };
   /** Where in the real transcript this was summarised from, so the mobile view
    *  can offer "see the original". The glasses have nowhere to open it. */
-  source?: { agentSessionId: string; messageIds?: string[] };
+  source?: { agentSessionId: string; agent?: AgentProvider; messageIds?: string[] };
 }
 
 export type StewardAskAnswer =
