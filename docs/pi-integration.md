@@ -166,7 +166,7 @@ Focused coverage includes:
 - cancel, leave, return, and reopen navigation without a dismiss request;
 - coexistence with the upstream reader pin/release behavior.
 
-The expanded focused suite passed 405 tests with 835 expectations. The complete
+The expanded focused suite passed 407 tests with 838 expectations. The complete
 G2 suite passed 554 tests with 1,307 expectations. Error-level LSP diagnostics
 and `git diff --check` were also clean for the current changes.
 

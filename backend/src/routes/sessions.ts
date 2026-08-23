@@ -19,7 +19,7 @@ import { KimiService } from '../services/kimi';
 import { KimiHistoryService } from '../services/kimi-history';
 import { OpenCodeService } from '../services/opencode';
 import { OpenCodeHistoryService } from '../services/opencode-history';
-import { PiService } from '../services/pi';
+import { PiService, isCanonicalPiSessionId } from '../services/pi';
 import { PiHistoryService } from '../services/pi-history';
 import type { AgentHistoryProvider, AgentThread, AgentThreadService } from '../services/agent-providers';
 import { PromptHistoryService } from '../services/prompt-history';
@@ -793,6 +793,9 @@ sessions.get('/history/:sessionId/conversation', async (c) => {
   const lastQuery = c.req.query('last');
   const last = lastQuery ? parseInt(lastQuery, 10) : undefined;
   const agent = c.req.query('agent');
+  if (agent === 'pi' && !isCanonicalPiSessionId(sessionId)) {
+    return c.json({ error: 'Invalid Pi session id' }, 400);
+  }
   const provider = agent && isAgentProvider(agent) ? agentHistoryProviders[agent] : undefined;
   const messages = provider
     ? await provider.getConversation(sessionId)

@@ -44,6 +44,11 @@ export interface PiEntry {
 
 const SESSION_LIST_CACHE_TTL_MS = 5000;
 const MAX_TRANSCRIPT_CACHE = 8;
+const PI_SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isCanonicalPiSessionId(value: string): boolean {
+  return PI_SESSION_ID_PATTERN.test(value);
+}
 
 interface CachedPiMetadata {
   mtimeMs: number;
@@ -307,6 +312,7 @@ async function mapWithConcurrency<T, R>(
       const index = next++;
       results[index] = await fn(values[index]);
     }
+    return;
   });
   await Promise.all(workers);
   return results;
@@ -378,7 +384,7 @@ export class PiSessionStore {
   }
 
   private async resolvePublicSession(sessionId: string): Promise<CachedPiSession | undefined> {
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId)) {
+    if (!isCanonicalPiSessionId(sessionId)) {
       return undefined;
     }
     const indexed = this.sessionsById.get(sessionId);
