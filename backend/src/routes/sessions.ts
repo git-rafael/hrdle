@@ -236,6 +236,19 @@ export function paneIndicatorState(opts: {
   return herdrState ?? opts.hookState ?? 'idle';
 }
 
+export function publicAgentSessionId(
+  agent: AgentProvider | undefined,
+  herdrSessionId: string | undefined,
+  resolvedSessionId?: string,
+): string | undefined {
+  if (resolvedSessionId) return resolvedSessionId;
+  // Pi reports a trusted local JSONL path through herdr, but public history
+  // routes accept only the canonical UUID read from that transcript. If the
+  // transcript is temporarily unavailable, omit the identity rather than
+  // exposing a host path that public clients cannot safely resolve.
+  return agent === 'pi' ? undefined : herdrSessionId;
+}
+
 export const sessions = new Hono();
 
 /** Build the full sessions list (shared by HTTP handler and WS push) */
@@ -400,7 +413,9 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
         includeClaudeInfo && s.agentSessionId
           ? bridgeSessionIds.get(s.agentSessionId)
           : undefined,
-      agentSessionId: includeThreadInfo ? (agentThread?.sessionId ?? s.agentSessionId) : undefined,
+      agentSessionId: includeThreadInfo
+        ? publicAgentSessionId(threadAgent, s.agentSessionId, agentThread?.sessionId)
+        : undefined,
       messageCount: includeClaudeInfo ? ccSession?.messageCount : undefined,
       gitBranch: includeClaudeInfo ? ccSession?.gitBranch : agentThread?.gitBranch,
       durationMinutes: includeClaudeInfo ? durationMinutes : agentThread?.updatedAt ? Math.round((Date.now() - new Date(agentThread.updatedAt).getTime()) / 60000) : undefined,
@@ -441,7 +456,7 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
           currentCommand: p.command,
           currentPath: p.path,
           agent: p.agent,
-          agentSessionId: paneThread?.sessionId ?? p.agentSessionId,
+          agentSessionId: publicAgentSessionId(p.agent, p.agentSessionId, paneThread?.sessionId),
           isActive: p.isActive,
           tabId: p.tabId,
           label: p.label,

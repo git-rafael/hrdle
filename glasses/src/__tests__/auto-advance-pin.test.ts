@@ -107,10 +107,10 @@ describe('the footer says which of the two the screen is in', () => {
     expect(screenText(c.state).footer).toContain('auto')
   })
 
-  // The pin is the innermost level: its release is the branch above both the
-  // banner dismiss and the back-out, so the double-tap goes there whatever
-  // else is true. The label is the only thing that can say so.
-  test('over a pinned read the label is the release, not the dismiss', () => {
+  // The pin is the innermost level: its release is the branch above the
+  // ordinary back-out, so the double-tap goes there whatever else is true.
+  // The label is the only thing that can say so.
+  test('over a pending question the pinned label is the release before back', () => {
     const c = reading()
     c.state.relayWaiting = [{
       id: 'q1',
@@ -121,8 +121,10 @@ describe('the footer says which of the two the screen is in', () => {
       text: 'Which store should the counters live in?',
       createdAt: 1,
     }] as GlassesRelayItem[]
-    // Unpinned, the double-tap does clear the banner, and the label says so.
-    expect(screenText(c.state).footer).toContain('dbl:later')
+    // Unpinned, the double-tap leaves the conversation without dismissing the
+    // question, so the wearer can return and open it again.
+    expect(screenText(c.state).footer).toContain('dbl:back')
+    expect(screenText(c.state).footer).not.toContain('dbl:later')
 
     idleThenTick(c)
     c.swipeUp()

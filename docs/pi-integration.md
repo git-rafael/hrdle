@@ -6,8 +6,10 @@ Hrdle can create, detect, resume, and display sessions that run the Pi coding
 agent as a first-class provider. Pi conversations and structured `ask_user`
 questions are available in the browser and on EVEN Realities G2 glasses.
 
-The integration is designed to work with the existing G2 relay protocol, so a
-server-side Pi adapter does not require a companion-app rebuild.
+The base Pi adapter works through Hrdle's existing glasses relay. The later
+question-context and pending-picker restoration improvements extend the relay
+with optional fields and update the G2 companion. Older clients remain wire
+compatible, but they cannot display or restore those enhanced states.
 
 ## Scope
 
@@ -20,15 +22,18 @@ server-side Pi adapter does not require a companion-app rebuild.
   transcript.
 - Expose Pi session metadata, search results, history, and conversation turns.
 - Read unresolved Pi `ask_user` tool calls from structured transcript records.
-- Relay single-choice, multi-select, and free-text questions to the G2 app.
+- Relay single-choice, multi-select, free-text, context, and option descriptions
+  to the G2 app.
+- Preserve an unanswered picker when the wearer closes it, leaves the
+  conversation, and later returns to answer it.
 - Prevent Pi output from falling through to generic numbered-screen scraping.
 
 ## Out of Scope
 
 - Pi usage or token metrics.
 - Pi-specific completion hooks or browser notifications.
-- Changes to the G2 companion application or its relay protocol.
 - Replacing Hrdle's upstream self-update and service-management design.
+- Packaging Hrdle through the workstation environment repository.
 
 ## Important Behavior
 
@@ -40,7 +45,9 @@ version 3 session, and canonicalizes it to the session UUID before exposing it
 to clients.
 
 Public history and conversation routes accept canonical UUIDs only. A
-URL-encoded absolute path supplied by an HTTP client is rejected.
+URL-encoded absolute path supplied by an HTTP client is rejected. If a trusted
+path cannot temporarily be resolved, Hrdle omits the public Pi session identity
+instead of exposing the host path.
 
 ### Conversation Reconstruction
 
@@ -72,9 +79,37 @@ unresolved structured Pi question is therefore treated as an effective blocked
 state. This lookup is gated on an active glasses relay subscriber, so ordinary
 browser-only sessions do not poll Pi transcripts unnecessarily.
 
-## Validation Environment
+### G2 Context and Picker Restoration
 
-Validation was performed on 2026-08-14 with:
+The relay carries context separately from the question and choices. The updated
+G2 companion renders bounded context and question text before selectable rows,
+reserving display lines so a long option description cannot push the decision
+context off-screen.
+
+Closing a picker does not answer or dismiss its structured question. Leaving a
+conversation uses a non-destructive back action, so returning to the session
+and tapping the pending question opens the picker again. Explicitly choosing to
+handle a question later from the relay overlay retains the existing server-side
+dismissal behavior. Reader pin/release remains the innermost double-tap action.
+
+## Validation Environments
+
+### Current v0.3.169 Port
+
+Automated validation was performed on 2026-08-23 with:
+
+- Hrdle v0.3.169, based on upstream commit `42957bac`;
+- branch `feature/pi-adapter-trial-v0.3.169`;
+- Bun v1.3.3;
+- NixOS on x86_64 Linux;
+- G2 companion manifest `com.hrdle.glasses` v0.0.82.
+
+The current port has not yet completed physical G2 validation. In particular,
+context rendering and pending-picker restoration remain publication gates.
+
+### Historical Physical Baseline
+
+Physical validation of the base adapter was performed on 2026-08-14 with:
 
 - Hrdle v0.3.126, based on upstream commit `4f00f87`;
 - Pi v0.80.6;
@@ -82,16 +117,16 @@ Validation was performed on 2026-08-14 with:
 - Bun v1.3.3;
 - NixOS on x86_64 Linux;
 - physical EVEN Realities G2 glasses;
-- the unmodified Hrdle G2 companion app, whose runtime reported v0.0.76;
+- the then-unmodified Hrdle G2 companion, whose runtime reported v0.0.76;
 - Groq `whisper-large-v3-turbo` for glasses speech-to-text.
 
 Voice-test reproduction requires a reachable Hrdle deployment and the tester's
 own Groq API key. No secret, device serial number, tailnet address, local session
-UUID, or transcript path is included in this document.
+UUID, transcript path, or local home path is included in this document.
 
 ## Automated Verification
 
-The following checks passed against the trial branch:
+The following checks pass against the v0.3.169 port:
 
 ```bash
 bun run --cwd shared typecheck
@@ -104,6 +139,7 @@ bun run --cwd frontend test
 bun run --cwd glasses test
 
 bun run lint
+bun run build
 bun run build:binary
 ```
 
@@ -112,8 +148,9 @@ Focused coverage includes:
 - provider registration, create-session validation, process detection, and
   lifecycle commands;
 - herdr `id` and `path` session references;
-- canonical UUID resolution, exact trusted Pi paths, Pi v3 header validation,
-  and rejection of public absolute-path reads;
+- canonical UUID resolution, trusted Pi paths, Pi v3 header validation, public
+  path rejection, and omission when canonicalization fails;
+- distinct canonical identities for multiple Pi panes;
 - active-branch reconstruction and abandoned-branch exclusion;
 - append-only cache updates;
 - metadata, search, history, and conversation conversion;
@@ -122,16 +159,22 @@ Focused coverage includes:
 - Pi-compatible `PI_ASK_USER_ALLOW_COMMENT` environment values;
 - suppression of unsafe generic screen scraping for Pi;
 - glasses snapshots and question appearance/removal without a herdr status
-  transition.
+  transition;
+- context propagation through the backend, shared wire type, G2 overlay, and
+  picker;
+- context-aware relay refresh and display-line reservation;
+- cancel, leave, return, and reopen navigation without a dismiss request;
+- coexistence with the upstream reader pin/release behavior.
 
-The final focused glasses relay suite passed 138 tests with 267 expectations.
-Editor/LSP error diagnostics were also clean for the changed relay files.
+The expanded focused suite passed 405 tests with 835 expectations. The complete
+G2 suite passed 554 tests with 1,307 expectations. Error-level LSP diagnostics
+and `git diff --check` were also clean for the current changes.
 
-## Physical G2 Verification
+## Historical Physical G2 Verification
 
-Each test was performed against the same active Pi conversation through the
-running Hrdle service. Structured Pi records and server logs were checked after
-the user-visible result.
+Each baseline test was performed against the same active Pi conversation through
+the running Hrdle v0.3.126 service. Structured Pi records and server logs were
+checked after the user-visible result.
 
 | Test | Procedure | Expected result | Result |
 |---|---|---|---|
@@ -147,30 +190,42 @@ the user-visible result.
 The session-resume logs showed the original glasses WebSocket closing, a new G2
 instance connecting, the same Hrdle workspace being subscribed, conversation
 rendering, and a new STT prompt reaching the same canonical Pi session UUID.
-The UUID and device identifiers are intentionally omitted from this document.
+The UUID and device identifiers are intentionally omitted.
+
+## Pending Physical G2 Verification
+
+The v0.3.169 binary and v0.0.82 companion must pass these tests one at a time
+before the branch is pushed:
+
+| Test | Procedure | Expected result | Status |
+|---|---|---|---|
+| Context rendering | Open a Pi `ask_user` containing a distinct context marker, question, and described options | Context appears before the question and choices in both overlay and picker | Pending |
+| Picker restoration | Open a structured picker, cancel it, leave the conversation, return to the same session, and tap the pending question | The same picker reopens and no dismiss request or accidental answer is emitted | Pending |
 
 ## Known Caveats
 
-- Hrdle v0.3.126 declares herdr protocol 16 as tested. This trial used protocol
-  20 and emitted the expected warning. All automated and physical tests above
-  passed, but upstream protocol certification remains separate work.
+- Hrdle v0.3.169 still declares herdr protocol 16 as tested. The historical trial
+  used protocol 20 successfully, but the current v0.3.169 binary must repeat the
+  runtime protocol smoke test.
 - The transcript cache is bounded by session count, not total bytes. Opening
   several unusually large Pi histories can increase Hrdle memory use and should
-  remain part of the multi-day trial monitoring.
-- Pi usage metrics and Pi-specific hook notifications are intentionally absent
-  from this change.
-- The adapter changes only the server, shared provider registry, and web UI. The
-  existing G2 app worked without rebuilding or changing the EHPK.
+  remain part of trial monitoring.
+- Trusted custom transcript paths can expand the in-memory discovery set over a
+  long-lived server process; bounded exact-path indexing remains follow-up work.
+- If `allowComment` is omitted, free-text cursor routing uses the Hrdle service's
+  `PI_ASK_USER_ALLOW_COMMENT` environment. A Pi pane launched with a different
+  value can disagree with that inferred row count.
+- Pi usage metrics and Pi-specific hook notifications are intentionally absent.
+- The context and picker-restoration behavior requires the updated v0.0.82 G2
+  companion; the base Pi picker remains compatible with older companions.
 
 ## Verification Summary
 
-Validated on Hrdle v0.3.126 with Pi v0.80.6, herdr v0.8.0 protocol 20,
-Bun v1.3.3, and physical EVEN Realities G2 glasses. All workspace typechecks,
-backend/frontend/glasses tests, lint, and the production binary build passed.
-Physical testing covered voice input, Pi `ask_user` rendering while herdr still
-reported the pane as working, exact multi-select results, free-text voice
-replies, ordered conversation history, long-response scrolling, app close/reopen
-session resume, and removal of resolved questions. The existing G2 companion
-app required no changes. Known follow-ups are formal herdr protocol-20
-certification and byte-based memory limits for unusually large Pi transcript
-caches.
+The Pi adapter has been ported onto Hrdle v0.3.169 and passes workspace
+TypeScript checks, backend/frontend/glasses tests, lint, production builds,
+binary build, focused security/session-identity regressions, and G2 controller
+regressions. Historical physical testing established the base adapter's voice,
+conversation, picker, selection, free-text, scrolling, and session-continuity
+behavior on v0.3.126. Publication of the v0.3.169 branch remains gated on a new
+runtime smoke test and physical validation of context rendering and pending
+picker restoration with companion v0.0.82.
