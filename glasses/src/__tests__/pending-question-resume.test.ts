@@ -35,6 +35,7 @@ function platform(): GlassesPlatform {
     render() {},
     renderHeader() {},
     requestExit() {},
+    onForegroundRegained() {},
     async startMicCapture() { return true },
     async stopMicCapture() {},
     async transcribeAudio() { throw new Error('not used here') },
@@ -91,5 +92,48 @@ describe('a pending question after closing its picker', () => {
     await inner(controller).handle('tap')
     expect(modeOf(controller)).toBe('choice')
     expect(controller.state.choiceOptions).toEqual(['Patch', 'Fork'])
+  })
+
+  test('a residual foreground-resume double-tap cannot dismiss the restored card', async () => {
+    const controller = new GlassesController(platform())
+    controller.state.sessions = [
+      { id: 's1', name: 'trial', state: 'working' },
+    ] as GlassesController['state']['sessions']
+    controller.state.mode = 'session_list'
+    inner(controller).onRelayUpsert(pendingQuestion())
+    expect(modeOf(controller)).toBe('overlay')
+
+    const realNow = Date.now
+    let now = 10_000
+    Date.now = () => now
+    try {
+      controller.onForegroundExit()
+      controller.swipeDown()
+      await Promise.resolve()
+
+      now += 2_000
+      controller.doubleTap()
+      await Promise.resolve()
+
+      expect(modeOf(controller)).toBe('overlay')
+      expect(controller.state.relayWaiting.map((item) => item.id)).toEqual(['pending-question'])
+      expect(dismissRequests).toEqual([])
+
+      now += 3_001
+      controller.doubleTap()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(dismissRequests).toHaveLength(1)
+      expect(modeOf(controller)).toBe('session_list')
+
+      inner(controller).onRelayUpsert({ ...pendingQuestion(), id: 'later-question' })
+      now = 9_000
+      controller.doubleTap()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(dismissRequests).toHaveLength(2)
+    } finally {
+      Date.now = realNow
+    }
   })
 })
