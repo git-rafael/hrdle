@@ -1783,7 +1783,8 @@ function choiceRowLine(state: AppState, opt: string, i: number): string {
 
 /**
  * Full-screen presentation of one relay item. Swipe cycles the queue,
- * tap jumps to the item's session, double-tap dismisses.
+ * tap jumps to the item's session. Double-tap closes a structured
+ * question without discarding it; other items keep their dismissal action.
  *
  * Questions and notifications share this screen because they are the same
  * gesture problem — one thing, full width, reachable from the ring. They part
@@ -1828,7 +1829,7 @@ function overlayContent(state: AppState): { headerText: string; bodyText: string
   const footerText = item.kind === 'info'
     ? `tap:open  dbl:close${next}`
     : item.choices?.length
-      ? `tap:choices  dbl:later${next}`
+      ? `tap:choices  dbl:back${next}`
       : `tap:open  dbl:later${next}`
   return { headerText, bodyText, footerText }
 }
