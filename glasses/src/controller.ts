@@ -50,6 +50,9 @@ const CONV_REFRESH_INTERVAL = 3000
 /** Between one keystroke of a walk and the next. Two writes inside one turn of
  *  the event loop can still arrive at the pane as a single read. */
 const KEYSTROKE_GAP_MS = 40
+/** The host can replay the ring sequence used to foreground the app. The
+ *  measured trailing double-tap arrived two seconds after the first gesture. */
+const FOREGROUND_GESTURE_GRACE_MS = 3000
 
 /**
  * One string of input, split into the keys a TUI will count as keys.
@@ -587,6 +590,8 @@ export class GlassesController {
    *  while it is not are consumed by the host and never reach the display, so
    *  they are pure BLE traffic for a panel nobody is looking at. */
   private foreground = true
+  /** First gesture that proved a missing foreground-enter event wrong. */
+  private foregroundRegainedAt = 0
   /** Ticks since the last auto step, so a page turn can cost several of them. */
   private autoTicks = 0
   /** Completed passes over the recap, counted towards AUTO_SCROLL_MAX_PASSES. */
@@ -1139,6 +1144,7 @@ export class GlassesController {
   onForegroundEnter(): void {
     if (this.stopped) return
     this.foreground = true
+    this.foregroundRegainedAt = 0
     this.state.spinnerTick = 0
     // Being brought back is the wearer's doing, so the panel relights: a
     // resume onto a dark screen reads as the crash it took a day to rule out.
@@ -1176,6 +1182,7 @@ export class GlassesController {
     // traffic that reaches nobody — and a WebView burning its budget on that
     // is a WebView the phone has a reason to throttle.
     this.foreground = false
+    this.foregroundRegainedAt = 0
     this.saveResumePoint()
     // Close the microphone as well. Nothing would have closed it: a recording
     // interrupted by the glasses showing something else went on streaming 16kHz
@@ -1401,10 +1408,11 @@ export class GlassesController {
     // Gone. The host keeps delivering ring input to a page it has already
     // revoked, and acting on it would restart the very work `shutdown` stopped.
     if (this.stopped) return
+    const now = Date.now()
     // Every ring gesture goes through here, so this is the one place that has
     // to know the reader is driving. The auto-advance clock stays out of the
     // way for AUTO_ADVANCE_IDLE_MS afterwards.
-    this.lastGestureAt = Date.now()
+    this.lastGestureAt = now
     this.lastGestureKind = action
     // Only the app the glasses are showing is given ring input, so a gesture
     // outranks a stale `FOREGROUND_EXIT`. Without this the app draws nothing
@@ -1413,6 +1421,7 @@ export class GlassesController {
     // its last frame is far worse than the traffic the flag was saving.
     if (!this.foreground) {
       this.foreground = true
+      this.foregroundRegainedAt = now
       this.platform.onForegroundRegained()
     }
     // Someone is here. Whatever the screen had settled into, it starts over.
@@ -1428,7 +1437,16 @@ export class GlassesController {
       if (action === 'doubleTap') this.wake(true)
       return
     }
-    this.lastActivityAt = Date.now()
+    // The host may deliver the scroll/click/double-click sequence that opened
+    // the app to its resumed WebView. Never let its trailing double-click mean
+    // "later / on PC" for a restored decision (or ask the host to exit again).
+    const regainAge = now - this.foregroundRegainedAt
+    if (
+      this.foregroundRegainedAt > 0
+      && (regainAge < 0 || regainAge > FOREGROUND_GESTURE_GRACE_MS)
+    ) this.foregroundRegainedAt = 0
+    if (action === 'doubleTap' && this.foregroundRegainedAt > 0) return
+    this.lastActivityAt = now
     switch (this.state.mode) {
       case 'session_list': return this.onSessionListAction(action)
       case 'conversation': return this.onConversationAction(action)
