@@ -1738,6 +1738,13 @@ export class GlassesController {
           this.exitOverlay()
           return
         }
+        // A structured question still exists on the agent until it is
+        // answered there. Treating "later / on PC" as a server dismissal made
+        // a delayed app-launch double-tap erase the only route back to it.
+        if (item.kind === 'waiting' && item.choices?.length) {
+          this.exitOverlay()
+          return
+        }
         await this.dismissItem(item)
         return
       }

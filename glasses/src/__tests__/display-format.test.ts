@@ -1232,7 +1232,8 @@ describe('notice dialog (overlay)', () => {
       overlayItemId: 'w1',
     }))
     expect(s.header).toContain('[!]')
-    expect(s.footer).toContain('dbl:later')
+    expect(s.footer).toContain('dbl:back')
+    expect(s.footer).not.toContain('dbl:later')
     expect(s.footer).toContain('tap:choices')
   })
 

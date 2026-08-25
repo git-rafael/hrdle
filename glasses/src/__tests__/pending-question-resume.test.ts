@@ -94,6 +94,23 @@ describe('a pending question after closing its picker', () => {
     expect(controller.state.choiceOptions).toEqual(['Patch', 'Fork'])
   })
 
+  test('a delayed launch double-tap keeps a structured question pending', async () => {
+    const controller = new GlassesController(platform())
+    controller.state.sessions = [
+      { id: 's1', name: 'trial', state: 'working' },
+    ] as GlassesController['state']['sessions']
+    controller.state.mode = 'session_list'
+    inner(controller).onRelayUpsert(pendingQuestion())
+    expect(modeOf(controller)).toBe('overlay')
+
+    controller.doubleTap()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(modeOf(controller)).toBe('session_list')
+    expect(controller.state.relayWaiting.map((item) => item.id)).toEqual(['pending-question'])
+    expect(dismissRequests).toEqual([])
+  })
+
   test('a residual foreground-resume double-tap cannot dismiss the restored card', async () => {
     const controller = new GlassesController(platform())
     controller.state.sessions = [
@@ -119,6 +136,7 @@ describe('a pending question after closing its picker', () => {
       expect(controller.state.relayWaiting.map((item) => item.id)).toEqual(['pending-question'])
       expect(dismissRequests).toEqual([])
 
+      inner(controller).onRelayUpsert({ ...pendingQuestion(), choices: undefined })
       now += 3_001
       controller.doubleTap()
       await new Promise((resolve) => setTimeout(resolve, 0))
@@ -126,7 +144,11 @@ describe('a pending question after closing its picker', () => {
       expect(dismissRequests).toHaveLength(1)
       expect(modeOf(controller)).toBe('session_list')
 
-      inner(controller).onRelayUpsert({ ...pendingQuestion(), id: 'later-question' })
+      inner(controller).onRelayUpsert({
+        ...pendingQuestion(),
+        id: 'later-question',
+        choices: undefined,
+      })
       now = 9_000
       controller.doubleTap()
       await new Promise((resolve) => setTimeout(resolve, 0))
